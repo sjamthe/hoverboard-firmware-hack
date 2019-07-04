@@ -462,12 +462,12 @@ int main(void) {
     }
 
 
-//    // ####### POWEROFF BY POWER-BUTTON #######
-//    if (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN)) {
-//      enable = 0;
-//      while (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN)) {}
-//      poweroff();
-//    }
+   // ####### POWEROFF BY POWER-BUTTON #######
+   if (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN)) {
+     enable = 0;
+     while (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN)) {}
+     poweroff();
+   }
 
 
     // ####### BEEP AND EMERGENCY POWEROFF #######
