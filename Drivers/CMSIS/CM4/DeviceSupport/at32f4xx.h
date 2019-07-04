@@ -2657,6 +2657,7 @@ typedef struct
 #define  RCC_APB1ENR_TIM3EN						RCC_APB1EN_TMR3EN
 #define  RCC_APB1EN_WWDGEN                      ((uint32_t)0x00000800)        /*!< Window Watchdog clock enable */
 #define  RCC_APB1EN_USART2EN                    ((uint32_t)0x00020000)        /*!< USART 2 clock enable */
+#define  RCC_APB1ENR_USART2EN					RCC_APB1EN_USART2EN
 #define  RCC_APB1EN_I2C1EN                      ((uint32_t)0x00200000)        /*!< I2C 1 clock enable */
 #define  RCC_APB1ENR_I2C2EN                   	RCC_APB1EN_I2C1EN
 #define  RCC_APB1EN_CAN1EN                      ((uint32_t)0x02000000)        /*!< CAN1 clock enable */
