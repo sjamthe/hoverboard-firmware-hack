@@ -43,5 +43,5 @@ void PPM_SysTick_Callback();
 void Nunchuck_Init();
 void Nunchuck_Read();
 void consoleScope();
-void consoleLog(char *message);
+void consoleLog(unsigned char *message);
 void setScopeChannel(uint8_t ch, int16_t val);

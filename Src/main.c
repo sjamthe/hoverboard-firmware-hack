@@ -47,6 +47,8 @@ ExtY rtY_Right;                  /* External outputs */
 
 
 void SystemClock_Config(void);
+void Error_Handler(void);
+void Char_Proto_Handler(void);
 
 extern ADC_HandleTypeDef hadc1;
 extern ADC_HandleTypeDef hadc2;
@@ -60,6 +62,9 @@ extern I2C_HandleTypeDef hi2c2;
 extern UART_HandleTypeDef huart2;
 #endif
 
+// the main thing qwhich determines how we are controlled from protocol
+// int control_type = CONTROL_TYPE_NONE;
+
 int cmd1;  // normalized input values. -1000 to 1000
 int cmd2;
 int cmd3;
@@ -71,11 +76,13 @@ typedef struct{
 } Serialcommand;
 
 volatile Serialcommand command;
+unsigned char ch_buf;
 
 uint8_t button1, button2;
 
 int steer; // global variable for steering. -1000 to 1000
 int speed; // global variable for speed. -1000 to 1000
+int lastspeed;
 
 float local_speed_coefficent;
 
@@ -90,12 +97,13 @@ extern uint8_t buzzerPattern; // global variable for the buzzer pattern. can be 
 extern uint8_t enable; // global variable for motor enable
 
 #if defined (CONTROL_ADC) || defined (CONTROL_SERIAL_USART2)
-extern volatile uint32_t timeout; // global variable for timeout
+  extern volatile uint32_t timeout; // global variable for timeout
 #endif
 
 extern float batteryVoltage; // global variable for battery voltage
 
 uint32_t inactivity_timeout_counter;
+uint32_t command_timeout_counter;
 
 #ifdef CONTROL_NUNCHUCK
 extern uint8_t nunchuck_data[6];
@@ -183,6 +191,10 @@ int main(void) {
   HAL_ADC_Start(&hadc1);
   HAL_ADC_Start(&hadc2);
 
+  #ifdef SERIAL_USART2_IT
+  USART2_IT_init();
+  #endif
+
 // Matlab Init
 // ###############################################################################
   
@@ -234,7 +246,13 @@ int main(void) {
 
   #ifdef CONTROL_SERIAL_USART2
     UART_Control_Init();
-    HAL_UART_Receive_DMA(&huart2, (uint8_t *)&command, 4);
+    #ifdef CHAR_PROTOCOL
+      if(HAL_UART_Receive_DMA(&huart2, (uint8_t *)&ch_buf, 1)  != HAL_OK) {
+        Error_Handler();
+      }
+    #else
+      HAL_UART_Receive_DMA(&huart2, (uint8_t *)&command, 4);
+    #endif
   #endif
 
   #ifdef DEBUG_I2C_LCD
@@ -259,6 +277,12 @@ int main(void) {
     LCD_WriteString(&lcd, "Initializing...");
   #endif
 
+  // sets up serial ports, and enables protocol on selected ports
+  // setup_protocol();
+
+  // int last_control_type = CONTROL_TYPE_NONE;
+
+
   float board_temp_adc_filtered = (float)adc_buffer.temp;
   float board_temp_deg_c;
 
@@ -267,6 +291,11 @@ int main(void) {
   while(1) {
     HAL_Delay(DELAY_IN_MAIN_LOOP); //delay in ms
 
+    #ifndef CHAR_PROTOCOL
+      cmd1 = 0;
+      cmd2 = 0;
+    #endif
+    
     #ifdef CONTROL_NUNCHUCK
       Nunchuck_Read();
       cmd1 = CLAMP((nunchuck_data[0] - 127) * 8, -1000, 1000); // x - axis. Nunchuck joystick readings range 30 - 230
@@ -303,12 +332,14 @@ int main(void) {
     #endif
 
     #ifdef CONTROL_SERIAL_USART2
-      cmd1 = CLAMP((int16_t)command.steer, -1000, 1000);
-      cmd2 = CLAMP((int16_t)command.speed, -1000, 1000);
-
+      #ifdef CHAR_PROTOCOL
+        Char_Proto_Handler();
+      #else
+        cmd1 = CLAMP((int16_t)command.steer, -1000, 1000);
+        cmd2 = CLAMP((int16_t)command.speed, -1000, 1000);
+      #endif
       timeout = 0;
     #endif
-
 
     // ####### LOW-PASS FILTER #######
     steer = steer * (1.0 - FILTER) + cmd1 * FILTER;
@@ -415,7 +446,7 @@ int main(void) {
     // ####### MIXER #######
     speedR = CLAMP(speed * local_speed_coefficent -  steer * STEER_COEFFICIENT, -1000, 1000);
     speedL = CLAMP(speed * local_speed_coefficent +  steer * STEER_COEFFICIENT, -1000, 1000);
-
+    
 
     #ifdef ADDITIONAL_CODE
       ADDITIONAL_CODE;
@@ -442,7 +473,7 @@ int main(void) {
 #endif
 
 
-    if (inactivity_timeout_counter % 25 == 0) {
+    //if (inactivity_timeout_counter % 25 == 0) {
       // ####### CALC BOARD TEMPERATURE #######
       board_temp_adc_filtered = board_temp_adc_filtered * 0.99 + (float)adc_buffer.temp * 0.01;
       board_temp_deg_c = ((float)TEMP_CAL_HIGH_DEG_C - (float)TEMP_CAL_LOW_DEG_C) / ((float)TEMP_CAL_HIGH_ADC - (float)TEMP_CAL_LOW_ADC) * (board_temp_adc_filtered - (float)TEMP_CAL_LOW_ADC) + (float)TEMP_CAL_LOW_DEG_C;
@@ -452,14 +483,33 @@ int main(void) {
         setScopeChannel(0, (int)adc_buffer.l_tx2);  // 1: ADC1
         setScopeChannel(1, (int)adc_buffer.l_rx2);  // 2: ADC2
       #endif
-      setScopeChannel(2, (int)speedR);  // 3: output speed: 0-1000
-      setScopeChannel(3, (int)speedL);  // 4: output speed: 0-1000
-      setScopeChannel(4, (int)adc_buffer.batt1);  // 5: for battery voltage calibration
-      setScopeChannel(5, (int)(batteryVoltage * 100.0f));  // 6: for verifying battery voltage calibration
-      setScopeChannel(6, (int)board_temp_adc_filtered);  // 7: for board temperature calibration
-      setScopeChannel(7, (int)board_temp_deg_c);  // 8: for verifying board temperature calibration
+      #ifdef CHAR_PROTOCOL
+        setScopeChannel(0, (int)cmd1);  // 1: steer
+        setScopeChannel(1, (int)cmd2);  // 2: speed
+        setScopeChannel(2, (int)steer);  // 3: output speed: 0-1000
+        setScopeChannel(3, (int)speed);  // 4: output speed: 0-1000
+        setScopeChannel(4, (int)lastspeed); //5
+        setScopeChannel(5, (int)speedL);  // 6: for verifying battery voltage calibration
+        setScopeChannel(6, (int)speedR);  // 7: for board temperature calibration
+        setScopeChannel(7, (int)command_timeout_counter);
+        lastspeed = speed;
+      #endif
+      #ifndef CHAR_PROTOCOL
+        setScopeChannel(2, (int)speedR);  // 3: output speed: 0-1000
+        setScopeChannel(3, (int)speedL);  // 4: output speed: 0-1000
+        setScopeChannel(4, (int)adc_buffer.batt1);  // 5: for battery voltage calibration
+        setScopeChannel(5, (int)(batteryVoltage * 100.0f));  // 6: for verifying battery voltage calibration
+        setScopeChannel(6, (int)board_temp_adc_filtered);  // 7: for board temperature calibration
+        setScopeChannel(7, (int)board_temp_deg_c);  // 8: for verifying board temperature calibration
+      #endif
       consoleScope();
-    }
+    //}
+    // if (inactivity_timeout_counter % 13 == 0) {
+    //   unsigned char tmp [] = "00";
+    //   tmp[0] = ch_buf;
+    //   tmp[1] = '\0';
+    //   //consoleLog(tmp);
+    // }
 
 
    // ####### POWEROFF BY POWER-BUTTON #######
@@ -554,4 +604,62 @@ void SystemClock_Config(void) {
 // #endif
   /* SysTick_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
+}
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @param  None
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  for (int i = 2; i >= 0; i--) {
+    buzzerFreq = 4;
+    buzzerPattern = 1;
+    HAL_Delay(5);
+  }
+  buzzerFreq = 0;
+}
+
+void Char_Proto_Handler(void)
+{
+  int dir = 0;
+  int turn = 0;
+
+  switch(ch_buf){
+    case 'S':
+    case 's':
+      dir = -1;
+      command_timeout_counter = 0;
+      break;
+    case 'W':
+    case 'w':
+      dir = 1;
+      command_timeout_counter = 0;
+      break;
+    case 'A':
+    case 'a':
+      turn = -1;
+      command_timeout_counter = 0;
+      break;
+    case 'D':
+    case 'd':
+      turn = 1;
+      command_timeout_counter = 0;
+      break;
+    default:
+      command_timeout_counter++;
+  }
+  //reset ch_buf
+  //ch_buf = '1';
+  if(command_timeout_counter == 0) {
+    cmd1 += turn; //steer
+    cmd2 += dir; //speed
+  }
+  if (command_timeout_counter > 100) { //Reset command after 20 cycles so we can stop
+    cmd1 = 0;
+    cmd2 = 0;
+  }
+  cmd1 = CLAMP(cmd1, -300, 300);
+  cmd2 = CLAMP(cmd2, -300, 300);
 }

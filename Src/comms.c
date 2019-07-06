@@ -15,6 +15,8 @@ UART_HandleTypeDef huart2;
 #define UART_DMA_CHANNEL DMA1_Channel7
 #endif
 
+extern uint8_t buzzerFreq;    // global variable for the buzzer pitch. can be 1, 2, 3, 4, 5, 6, 7...
+extern uint8_t buzzerPattern; // global variable for the buzzer pattern. can be 1, 2, 3, 4, 5, 6, 7...
 
 volatile uint8_t uart_buf[100];
 volatile int16_t ch_buf[8];
@@ -58,7 +60,27 @@ void consoleScope() {
   #endif
 }
 
-void consoleLog(char *message)
+void consoleLog(unsigned char *message)
 {
-    HAL_UART_Transmit_DMA(&huart2, (uint8_t *)message, strlen(message));
+  // for (int i = 2; i >= 0; i--) {
+  //   buzzerFreq = 4;
+  //   buzzerPattern = 1;
+  //   HAL_Delay(5);
+  // }
+  // buzzerFreq = 0;
+  #ifdef CONTROL_SERIAL_USART2
+    // HAL_UART_Transmit_DMA(&huart2, (uint8_t *)message, strlen(message));
+  #endif
+
+  #if defined DEBUG_SERIAL_ASCII && (defined DEBUG_SERIAL_USART2 || defined DEBUG_SERIAL_USART3)
+    memset((void *)uart_buf, 0, sizeof(uart_buf));
+    sprintf((char *)uart_buf, "0:%s\r\n", message);
+
+    if(UART_DMA_CHANNEL->CNDTR == 0) {
+      UART_DMA_CHANNEL->CCR &= ~DMA_CCR_EN;
+      UART_DMA_CHANNEL->CNDTR = strlen((char *)uart_buf);
+      UART_DMA_CHANNEL->CMAR  = (uint32_t)uart_buf;
+      UART_DMA_CHANNEL->CCR |= DMA_CCR_EN;
+    }
+  #endif
 }

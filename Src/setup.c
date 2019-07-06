@@ -188,39 +188,6 @@ void UART_Init() {
 }
 #endif
 
-/*
-void UART_Init() {
-  __HAL_RCC_USART2_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  UART_HandleTypeDef huart2;
-  huart2.Instance          = USART2;
-  huart2.Init.BaudRate     = 115200;
-  huart2.Init.WordLength   = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits     = UART_STOPBITS_1;
-  huart2.Init.Parity       = UART_PARITY_NONE;
-  huart2.Init.Mode         = UART_MODE_TX;
-  huart2.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  HAL_UART_Init(&huart2);
-
-  USART2->CR3 |= USART_CR3_DMAT;  // | USART_CR3_DMAR | USART_CR3_OVRDIS;
-
-  GPIO_InitTypeDef GPIO_InitStruct;
-  GPIO_InitStruct.Pin   = GPIO_PIN_2;
-  GPIO_InitStruct.Pull  = GPIO_PULLUP;
-  GPIO_InitStruct.Mode  = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  DMA1_Channel7->CCR   = 0;
-  DMA1_Channel7->CPAR  = (uint32_t) & (USART3->DR);
-  DMA1_Channel7->CNDTR = 0;
-  DMA1_Channel7->CCR   = DMA_CCR_MINC | DMA_CCR_DIR;
-  DMA1->IFCR           = DMA_IFCR_CTCIF7 | DMA_IFCR_CHTIF7 | DMA_IFCR_CGIF7;
-}
-*/
-
 DMA_HandleTypeDef hdma_i2c2_rx;
 DMA_HandleTypeDef hdma_i2c2_tx;
 
